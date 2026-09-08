@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+*.log
+.DS_Store
+.vercel/
+.certs/
+*.tsbuildinfo
+apps/web/vite.config.js
+apps/web/vite.config.d.ts

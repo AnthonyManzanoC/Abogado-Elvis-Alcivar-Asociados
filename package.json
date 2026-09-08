@@ -1,0 +1,22 @@
+{
+  "name": "alcivar-legal",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c green,cyan \"npm run dev -w @alcivar/api\" \"npm run dev -w @alcivar/web\"",
+    "build": "npm run build -w @alcivar/api && npm run build -w @alcivar/web",
+    "start": "npm run start -w @alcivar/api",
+    "migrate": "npm run migrate -w @alcivar/api",
+    "seed": "npm run seed -w @alcivar/api",
+    "typecheck": "npm run typecheck -w @alcivar/api && npm run typecheck -w @alcivar/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
