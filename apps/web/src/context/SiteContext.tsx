@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { fallbackData } from "../data";
 import { api } from "../lib/api";
 import type { BootstrapData } from "../types";
@@ -9,16 +9,22 @@ const SiteContext = createContext<SiteContextValue>({ ...fallbackData, loading: 
 export function SiteProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<BootstrapData>(fallbackData);
   const [loading, setLoading] = useState(true);
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
-      setData(await api<BootstrapData>("/api/public/bootstrap"));
+      const next = await api<BootstrapData>("/api/public/bootstrap");
+      setData({ ...next, settings: { ...fallbackData.settings, ...next.settings } });
     } catch {
-      setData(fallbackData);
+      // Keep the last successfully loaded configuration during a temporary outage.
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { void refresh(); }, []);
+  }, []);
+  useEffect(() => {
+    void refresh();
+    const onFocus = () => { void refresh(); };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
   return <SiteContext.Provider value={{ ...data, loading, refresh }}>{children}</SiteContext.Provider>;
 }
 

@@ -65,6 +65,18 @@ En `/admin` puedes:
 - Configurar el número de WhatsApp, correo, dirección, mapa, redes, agenda y duración de consulta.
 - Guardar los datos SMTP y usar **Probar SMTP** antes de activar las notificaciones.
 
+### Mapa y contacto configurables
+
+En **ADMIN → Configuración** se puede cambiar el título y la presentación de Contacto, el mensaje inicial de WhatsApp, los canales, la dirección y las indicaciones para llegar a la oficina.
+
+La sección **Mapa del despacho** permite mostrar u ocultar el mapa, elegir carga al pulsar o automática y ver una vista previa antes de guardar. Por defecto busca la dirección pública. Para señalar el lugar exacto, pega la URL o el HTML de **Google Maps → Compartir → Insertar un mapa → Copiar HTML**. El sistema extrae únicamente la URL HTTPS de Google; nunca ejecuta el HTML pegado. Los enlaces cortos se admiten en el campo de enlace externo, no como iframe. [Instrucciones oficiales de Google](https://support.google.com/maps/answer/7101463?co=GENIE.Platform%3DDesktop&hl=es).
+
+Verifica en la vista previa el marcador y la ruta. **Dirección o coordenadas para el mapa** determina el destino de **Cómo llegar**; si está vacío se utiliza la dirección pública. Un mapa basado solo en una dirección es una referencia, no una verificación del negocio. No se necesita una clave para los [enlaces de búsqueda e indicaciones](https://developers.google.com/maps/documentation/urls/get-started).
+
+La migración aditiva `003_contact_map.sql` incorpora estos campos sin reemplazar contenido ni contraseñas. Configuración y horarios ahora se guardan en una sola transacción; si falla una parte se revierte todo. Se conservan los turnos partidos existentes. Dejar la contraseña SMTP vacía mantiene la anterior. El sitio actualiza sus datos al volver a la pestaña, y mantiene la última configuración cargada ante un fallo temporal de conexión.
+
+Pruebas de esta mejora: `npm test` (validación, enlaces y renderizado del mapa), `npm run typecheck` y `npm run build`. Para comprobar la integración real, desde `apps/api` ejecuta `node --import tsx ../../tests/contact-integration.mjs`: usa la base configurada, realiza todas sus escrituras dentro de una transacción que revierte al finalizar y no envía correos ni crea citas. Esta prueba incluye un error de guardado simulado deliberadamente para verificar la reversión.
+
 Los recordatorios se ejecutan cada 15 minutos mientras la API esté activa. Para el despliegue en Render Starter, conserva una única instancia de API: así el programador no duplica envíos.
 
 ## Calidad y seguridad

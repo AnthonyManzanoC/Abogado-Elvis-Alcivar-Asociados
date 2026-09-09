@@ -11,6 +11,7 @@ import { db, withTransaction } from "../db.js";
 import { sendSmtpTest } from "../notifications.js";
 import { encryptSecret, requireAdmin, signAdminToken } from "../security.js";
 import { slugify } from "../utils.js";
+import { availabilitySchema, settingsSchema } from "../settings-schema.js";
 
 await mkdir(config.uploadsDir, { recursive: true });
 
@@ -219,50 +220,37 @@ adminRouter.get("/settings", async (_req, res) => {
   res.json({ ...safe, smtpPasswordConfigured: Boolean(smtp_password_encrypted) });
 });
 
-const settingsSchema = z.object({
-  firmName: z.string().min(2).max(120),
-  logoUrl: z.string().max(1000),
-  attorneyName: z.string().min(2).max(150),
-  professionalTitle: z.string().min(2).max(150),
-  tagline: z.string().min(3).max(180),
-  biography: z.string().max(10000),
-  phone: z.string().max(40),
-  whatsappNumber: z.string().max(30),
-  contactEmail: z.union([z.literal(""), z.email()]),
-  officeAddress: z.string().max(300),
-  mapsUrl: z.string().max(1000),
-  instagramUrl: z.string().max(1000),
-  tiktokUrl: z.string().max(1000),
-  officeHoursNote: z.string().max(300),
-  consultationMinutes: z.coerce.number().int().min(15).max(240),
-  smtpHost: z.string().max(300),
-  smtpPort: z.coerce.number().int().min(1).max(65535),
-  smtpSecure: z.boolean(),
-  smtpUser: z.string().max(300),
-  smtpPassword: z.string().max(500).optional().default(""),
-  smtpFromEmail: z.union([z.literal(""), z.email()]),
-  smtpFromName: z.string().max(200),
-  notifyAttorney: z.boolean(),
-  notifyClient: z.boolean(),
-  remindersEnabled: z.boolean()
-});
-
 adminRouter.put("/settings", async (req, res) => {
   const parsed = settingsSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Revisa la configuración", details: parsed.error.flatten() });
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Revisa la configuración", details: parsed.error.flatten() });
   const s = parsed.data;
   const encryptedPassword = s.smtpPassword ? encryptSecret(s.smtpPassword) : null;
-  const { rows } = await db.query(
+  const settings = await withTransaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(8742301)");
+    const { rows } = await client.query(
     `UPDATE site_settings SET
       firm_name=$1,logo_url=$2,attorney_name=$3,professional_title=$4,tagline=$5,biography=$6,phone=$7,whatsapp_number=$8,
       contact_email=$9,office_address=$10,maps_url=$11,instagram_url=$12,tiktok_url=$13,office_hours_note=$14,
       consultation_minutes=$15,smtp_host=$16,smtp_port=$17,smtp_secure=$18,smtp_user=$19,
       smtp_password_encrypted=COALESCE($20,smtp_password_encrypted),smtp_from_email=$21,smtp_from_name=$22,
-      notify_attorney=$23,notify_client=$24,reminders_enabled=$25,updated_at=NOW()
+      notify_attorney=$23,notify_client=$24,reminders_enabled=$25,
+      map_enabled=COALESCE($26,map_enabled),map_embed_url=COALESCE($27,map_embed_url),
+      map_query=COALESCE($28,map_query),map_load_on_click=COALESCE($29,map_load_on_click),
+      office_directions=COALESCE($30,office_directions),contact_heading=COALESCE($31,contact_heading),
+      contact_intro=COALESCE($32,contact_intro),whatsapp_message=COALESCE($33,whatsapp_message),updated_at=NOW()
      WHERE id=1 RETURNING *`,
-    [s.firmName,s.logoUrl,s.attorneyName,s.professionalTitle,s.tagline,s.biography,s.phone,s.whatsappNumber,s.contactEmail,s.officeAddress,s.mapsUrl,s.instagramUrl,s.tiktokUrl,s.officeHoursNote,s.consultationMinutes,s.smtpHost,s.smtpPort,s.smtpSecure,s.smtpUser,encryptedPassword,s.smtpFromEmail,s.smtpFromName,s.notifyAttorney,s.notifyClient,s.remindersEnabled]
-  );
-  const { smtp_password_encrypted, ...safe } = rows[0];
+    [s.firmName,s.logoUrl,s.attorneyName,s.professionalTitle,s.tagline,s.biography,s.phone,s.whatsappNumber,s.contactEmail,s.officeAddress,s.mapsUrl,s.instagramUrl,s.tiktokUrl,s.officeHoursNote,s.consultationMinutes,s.smtpHost,s.smtpPort,s.smtpSecure,s.smtpUser,encryptedPassword,s.smtpFromEmail,s.smtpFromName,s.notifyAttorney,s.notifyClient,s.remindersEnabled,s.mapEnabled??null,s.mapEmbedUrl??null,s.mapQuery??null,s.mapLoadOnClick??null,s.officeDirections??null,s.contactHeading??null,s.contactIntro??null,s.whatsappMessage??null]
+    );
+    if (!rows[0]) throw new Error("Configuración del despacho no encontrada");
+    if (s.availability) {
+      await client.query("DELETE FROM availability");
+      for (const item of s.availability) {
+        await client.query("INSERT INTO availability (day_of_week,start_time,end_time,slot_minutes,active) VALUES ($1,$2,$3,$4,$5)", [item.dayOfWeek,item.startTime,item.endTime,item.slotMinutes,item.active]);
+      }
+    }
+    return rows[0];
+  });
+  const { smtp_password_encrypted, ...safe } = settings;
   res.json({ ...safe, smtpPasswordConfigured: Boolean(smtp_password_encrypted) });
 });
 
@@ -280,15 +268,10 @@ adminRouter.get("/availability", async (_req, res) => {
 });
 
 adminRouter.put("/availability", async (req, res) => {
-  const parsed = z.array(z.object({
-    dayOfWeek: z.coerce.number().int().min(0).max(6),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/),
-    slotMinutes: z.coerce.number().int().min(15).max(240),
-    active: z.boolean()
-  })).max(30).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Disponibilidad inválida" });
+  const parsed = availabilitySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Disponibilidad inválida" });
   await withTransaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(8742301)");
     await client.query("DELETE FROM availability");
     for (const item of parsed.data) {
       await client.query(

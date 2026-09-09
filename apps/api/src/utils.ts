@@ -18,5 +18,7 @@ export const makeReference = () => {
 export const publicSettingsColumns = `
   firm_name, logo_url, attorney_name, professional_title, tagline, biography, phone,
   whatsapp_number, contact_email, office_address, maps_url, instagram_url,
-  tiktok_url, timezone, consultation_minutes, office_hours_note
+  tiktok_url, timezone, consultation_minutes, office_hours_note,
+  map_enabled, map_embed_url, map_query, map_load_on_click, office_directions,
+  contact_heading, contact_intro, whatsapp_message
 `;

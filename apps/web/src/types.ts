@@ -10,6 +10,14 @@ export type SiteSettings = {
   contact_email: string;
   office_address: string;
   maps_url: string;
+  map_enabled: boolean;
+  map_embed_url: string;
+  map_query: string;
+  map_load_on_click: boolean;
+  office_directions: string;
+  contact_heading: string;
+  contact_intro: string;
+  whatsapp_message: string;
   instagram_url: string;
   tiktok_url: string;
   timezone: string;
