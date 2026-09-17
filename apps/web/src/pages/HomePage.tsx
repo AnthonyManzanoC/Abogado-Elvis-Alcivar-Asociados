@@ -1,5 +1,6 @@
 import { ArrowRight, Check, ChevronRight, MapPin, Play, Scale, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
+import { SocialMedia, embedUrl } from "../components/SocialMedia";
 import { useSite } from "../context/SiteContext";
 import { assetUrl } from "../lib/api";
 
@@ -8,6 +9,7 @@ const iconFor = (icon: string) => icon === "shield" ? ShieldCheck : Scale;
 export function HomePage() {
   const { settings, services, publications } = useSite();
   const featured = [...publications.filter((post) => post.kind === "case"), ...publications.filter((post) => post.kind !== "case")].slice(0, 3);
+  const hasOfficialFeaturedEmbed = featured.some((post) => Boolean(embedUrl(post)) && !post.gallery?.length && !post.media_url);
   return <>
     <section className="hero page-section">
       <div className="hero-copy">
@@ -51,9 +53,9 @@ export function HomePage() {
 
     <section className="page-section showcase-preview">
       <div className="section-heading"><div><span className="eyebrow">Vitrina legal</span><h2>{settings.results_phrase || "Resultados de tener una defensa técnica y eficaz"}</h2></div><Link className="text-link" to="/vitrina">Explorar contenido <ArrowRight size={17} /></Link></div>
-      <div className="publication-grid">
+      <div className={`publication-grid${hasOfficialFeaturedEmbed ? " publication-grid--official-embeds" : ""}`}>
         {featured.map((post, index) => <article className={index === 0 ? "publication-card featured" : "publication-card"} key={post.id}>
-          <div className="publication-image">{post.thumbnail_url ? <img src={assetUrl(post.thumbnail_url)} alt="" /> : <div className="publication-source-preview"><span>{post.platform}</span><strong>Publicación original</strong></div>}{post.kind === "video" && <span className="play-badge"><Play fill="currentColor" /></span>}<span className="platform-badge">{post.platform}</span></div>
+          {embedUrl(post) ? <SocialMedia post={post} interactive autoLoadEmbed /> : <div className="publication-image">{post.thumbnail_url ? <img src={assetUrl(post.thumbnail_url)} alt="" /> : <div className="publication-source-preview"><span>{post.platform}</span><strong>Publicación original</strong></div>}{post.kind === "video" && <span className="play-badge"><Play fill="currentColor" /></span>}<span className="platform-badge">{post.platform}</span></div>}
           <div className="publication-body"><span>{post.kind === "case" ? "Caso publicado" : post.kind === "article" ? "Criterio legal" : "Desde el despacho"}</span><h3>{post.title}</h3><p>{post.excerpt}</p><Link className="text-link" to={`/vitrina/${post.slug}`}>Ver en vitrina <ArrowRight size={16} /></Link></div>
         </article>)}
       </div>

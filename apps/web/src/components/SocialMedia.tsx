@@ -37,11 +37,22 @@ export function embedUrl(post: Pick<Publication,"external_url">) {
   }catch{/* Invalid or unsupported provider. */}
   return "";
 }
-export function SocialMedia({post,interactive=false}:{post:Publication;interactive?:boolean}){
-  const [loaded,setLoaded]=useState(false),[index,setIndex]=useState(0);
+type SocialMediaProps = {
+  post: Publication;
+  interactive?: boolean;
+  /** Loads the official provider on public showcase cards, not in ADMIN. */
+  autoLoadEmbed?: boolean;
+};
+
+export function SocialMedia({post,interactive=false,autoLoadEmbed=false}:SocialMediaProps){
+  const [index,setIndex]=useState(0);
   const gallery=post.gallery||[];const current=gallery[index%Math.max(1,gallery.length)];
   const embed=embedUrl(post),source=safeExternalUrl(post.external_url);
   const thumb=assetUrl(post.thumbnail_url),media=assetUrl(post.media_url);
+  // First-party galleries and directly hosted media always take precedence.
+  // This keeps ADMIN-controlled content independent of a social provider.
+  const shouldAutoLoadEmbed = interactive && autoLoadEmbed && Boolean(embed) && !current && !media;
+  const [loaded,setLoaded]=useState<boolean>(shouldAutoLoadEmbed);
   const providerLabel=post.platform === "instagram" ? "Instagram" : post.platform === "tiktok" ? "TikTok" : post.platform === "youtube" ? "YouTube" : post.platform;
   const officialPreview = Boolean(source && embed && !current && !media);
   // A thumbnail supplied from ADMIN always wins.  Only social case cards that
@@ -55,13 +66,13 @@ export function SocialMedia({post,interactive=false}:{post:Publication;interacti
     <span className="official-post-preview-copy"><strong>Publicación original de {providerLabel}</strong><small>{interactive ? "Cargar carrusel, fotos, descripción y contenido que permita la red" : "Ver la publicación original"}</small></span>
     <span className="official-post-play" aria-hidden="true"><Play fill="currentColor" /></span>
   </button>;
-  return <div className="social-media-block">
+  return <div className={`social-media-block${shouldAutoLoadEmbed ? " social-media-block--auto-embed" : ""}`}>
     {interactive&&current?<div className="media-carousel" role="region" aria-label={`Galería: ${post.title}`} tabIndex={0} onKeyDown={e=>{if(e.key==="ArrowRight")setIndex(i=>(i+1)%gallery.length);if(e.key==="ArrowLeft")setIndex(i=>(i+gallery.length-1)%gallery.length);}}>
       {current.type==="video"?<video key={current.url} controls playsInline preload="metadata" src={assetUrl(current.url)} aria-label={current.alt||post.title}/>:<img src={assetUrl(current.url)} alt={current.alt||post.title} loading="lazy"/>}
       {gallery.length>1&&<div className="carousel-controls"><button aria-label="Imagen anterior" onClick={()=>setIndex(i=>(i+gallery.length-1)%gallery.length)}><ChevronLeft/></button><span aria-live="polite">{index%gallery.length+1} / {gallery.length}</span><button aria-label="Imagen siguiente" onClick={()=>setIndex(i=>(i+1)%gallery.length)}><ChevronRight/></button></div>}
     </div>:interactive&&media&&(post.kind==="video"||/\.(mp4|webm|ogg)(\?|$)/i.test(media))?<video className="native-video" controls playsInline preload="metadata" poster={thumb||undefined} src={media}/>:interactive&&officialPreview&&!loaded?sourcePreview:!(interactive&&loaded&&embed)&&<div className="showcase-media">{thumb||media?<img src={media||thumb} alt={post.title} loading="lazy"/>:sourcePreview}<span className="platform-badge">{post.platform}</span></div>}
     {interactive&&embed&&!loaded&&!officialPreview&&(current||media||thumb)&&<div className="provider-embed">{sourcePreview}</div>}
-    {interactive&&embed&&loaded&&<div className="provider-embed"><iframe className="social-embed" src={embed} title={`Publicación original: ${post.title}`} loading="lazy" referrerPolicy="no-referrer" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen/></div>}
+    {interactive&&embed&&loaded&&<div className="provider-embed"><iframe className="social-embed" src={embed} title={`Publicación original: ${post.title}`} loading={shouldAutoLoadEmbed ? "eager" : "lazy"} referrerPolicy="no-referrer" allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen/></div>}
     {interactive&&source&&<a className="social-source-link" href={source} target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/> Ver publicación y comentarios reales en {post.platform}</a>}
   </div>;
 }

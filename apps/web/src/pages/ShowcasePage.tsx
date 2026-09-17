@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useSite } from "../context/SiteContext";
 import { api } from "../lib/api";
 import { safeExternalUrl } from "../lib/contact";
-import { SocialMedia } from "../components/SocialMedia";
+import { SocialMedia, embedUrl } from "../components/SocialMedia";
 import type { Publication } from "../types";
 
 const filters = ["Todo", "Artículo", "Caso", "Video", "Foto"];
@@ -49,8 +49,8 @@ export function ShowcasePage() {
       <div className="social-actions"><a href={settings.instagram_url} target="_blank" rel="noreferrer"><Instagram /> Instagram</a><a href={settings.tiktok_url} target="_blank" rel="noreferrer">TikTok ↗</a></div>
     </section>
     <section className="showcase-grid page-section">
-      {items.map((post, index) => { const sourceUrl = safeExternalUrl(post.external_url); return <article className={index === 0 ? "showcase-card wide" : "showcase-card"} key={post.id}>
-        <SocialMedia post={post} interactive />
+      {items.map((post, index) => { const sourceUrl = safeExternalUrl(post.external_url); const providerFirst = Boolean(embedUrl(post)) && !post.gallery?.length && !post.media_url; const cardClass = `${index === 0 ? "showcase-card wide" : "showcase-card"}${providerFirst ? " showcase-card--social-embed" : ""}`; return <article className={cardClass} key={post.id}>
+        <SocialMedia post={post} interactive autoLoadEmbed />
         <div className="showcase-copy"><span>{post.kind}</span><h2>{post.title}</h2><p>{post.excerpt}</p><Link className="text-link" to={`/vitrina/${post.slug}`}>Ver historia completa <ArrowRight /></Link>{sourceUrl ? <a className="text-link" href={sourceUrl} target="_blank" rel="noreferrer">Abrir en {post.platform} <ArrowRight /></a> : <Link className="text-link" to={`/vitrina/${post.slug}`}>Leer contenido <ArrowRight /></Link>}</div>
       </article>; })}
       {!items.length && !loading && <div className="empty-state"><h2>Aún no hay publicaciones aquí.</h2><p>El nuevo contenido aparecerá cuando se publique desde el panel administrativo.</p></div>}
