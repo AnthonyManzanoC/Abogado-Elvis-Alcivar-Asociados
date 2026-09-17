@@ -4,6 +4,8 @@ import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useSite } from "../context/SiteContext";
 import { assetUrl } from "../lib/api";
 import { contactMap, safeExternalUrl, whatsappUrl } from "../lib/contact";
+import { LegalAssistant } from "./LegalAssistant";
+import { WebMCP } from "./WebMCP";
 
 const nav = [
   ["/servicios", "Servicios"],
@@ -38,6 +40,8 @@ export function SiteLayout() {
         </nav>
       </header>
       <main><Outlet /></main>
+      <WebMCP />
+      <LegalAssistant />
       <footer className="site-footer">
         <div className="footer-top">
           <div><span className="eyebrow">Alcívar Legal</span><h2>Tu caso merece una estrategia clara.</h2></div>
@@ -45,7 +49,7 @@ export function SiteLayout() {
         </div>
         <div className="footer-grid">
           <div>{settings.logo_url ? <span className="footer-logo"><img src={assetUrl(settings.logo_url)} alt={settings.firm_name} /></span> : <p className="footer-brand">AL</p>}<p>Defensa técnica, comunicación directa y atención confidencial en Babahoyo.</p></div>
-          <div><strong>Navegación</strong>{nav.map(([href, label]) => <Link key={href} to={href}>{label}</Link>)}</div>
+          <div><strong>Navegación</strong>{nav.map(([href, label]) => <Link key={href} to={href}>{label}</Link>)}<Link to="/consultar">Enviar consulta</Link><Link to="/seguimiento">Mi seguimiento</Link></div>
           <div><strong>Despacho</strong><p>{settings.office_address}</p><p>{settings.office_hours_note}</p>{map.directions && <a href={map.directions} target="_blank" rel="noopener noreferrer">Cómo llegar ↗</a>}</div>
           <div><strong>Conecta</strong>{instagram && <a href={instagram} target="_blank" rel="noopener noreferrer"><Instagram size={16} /> Instagram</a>}{tiktok && <a href={tiktok} target="_blank" rel="noopener noreferrer">TikTok</a>}</div>
         </div>

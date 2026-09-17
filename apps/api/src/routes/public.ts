@@ -2,7 +2,8 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { db, withTransaction } from "../db.js";
-import { sendAppointmentNotifications } from "../notifications.js";
+import { enqueueRecordNotifications, trackingLink } from "../notifications.js";
+import { createTrackingAccess } from "../client-security.js";
 import { makeReference, publicSettingsColumns } from "../utils.js";
 
 export const publicRouter = Router();
@@ -24,6 +25,7 @@ const appointmentSchema = z.object({
   practiceArea: z.string().trim().min(2).max(100),
   reason: z.string().trim().min(10).max(1500),
   privacyAccepted: z.literal(true),
+  modality: z.enum(["presencial", "virtual"]).optional().default("presencial"),
   website: z.string().max(0).optional().default("")
 });
 
@@ -32,7 +34,7 @@ publicRouter.get("/bootstrap", async (_req, res) => {
     db.query(`SELECT ${publicSettingsColumns} FROM site_settings WHERE id = 1`),
     db.query("SELECT * FROM services WHERE active = TRUE ORDER BY display_order, title"),
     db.query(`SELECT id, slug, title, excerpt, body, kind, platform, media_url, thumbnail_url,
-                     external_url, featured, legal_disclaimer, published_at
+                     external_url, featured, legal_disclaimer, published_at, gallery
               FROM publications WHERE status = 'published' ORDER BY featured DESC, published_at DESC`)
   ]);
   res.json({ settings: settings.rows[0], services: services.rows, publications: publications.rows });
@@ -58,7 +60,7 @@ publicRouter.get("/publications", async (req, res) => {
   }
   const { rows } = await db.query(
     `SELECT id, slug, title, excerpt, body, kind, platform, media_url, thumbnail_url,
-            external_url, featured, legal_disclaimer, published_at
+            external_url, featured, legal_disclaimer, published_at, gallery
      FROM publications WHERE ${where} ORDER BY featured DESC, published_at DESC`,
     values
   );
@@ -78,7 +80,7 @@ publicRouter.get("/publications/feed", async (req, res) => {
   values.push(limit + 1, offset);
   const { rows } = await db.query(
     `SELECT id, slug, title, excerpt, body, kind, platform, media_url, thumbnail_url,
-            external_url, featured, legal_disclaimer, published_at
+            external_url, featured, legal_disclaimer, published_at, gallery
      FROM publications WHERE ${where}
      ORDER BY featured DESC, published_at DESC, id DESC
      LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -91,7 +93,7 @@ publicRouter.get("/publications/feed", async (req, res) => {
 publicRouter.get("/publications/:slug", async (req, res) => {
   const { rows } = await db.query(
     `SELECT id, slug, title, excerpt, body, kind, platform, media_url, thumbnail_url,
-            external_url, featured, legal_disclaimer, published_at
+            external_url, featured, legal_disclaimer, published_at, gallery
      FROM publications WHERE slug = $1 AND status = 'published'`,
     [req.params.slug]
   );
@@ -162,10 +164,14 @@ publicRouter.post("/appointments", appointmentLimiter, async (req, res) => {
 
   const day = startsAt.getUTCDay();
   const settingsResult = await db.query(
-    `SELECT consultation_minutes, whatsapp_number, attorney_name FROM site_settings WHERE id = 1`
+    `SELECT consultation_minutes, whatsapp_number, attorney_name,virtual_enabled,virtual_fee,payment_instructions,payments_test_mode,public_site_url FROM site_settings WHERE id = 1`
   );
   const settings = settingsResult.rows[0];
+  if (data.modality === "virtual" && (!settings.virtual_enabled || Number(settings.virtual_fee) <= 0 || !settings.payment_instructions)) {
+    return res.status(400).json({ error: "Las consultas virtuales todavía no están habilitadas. Elige presencial o contacta al despacho." });
+  }
   const reference = makeReference();
+  const tracking = createTrackingAccess();
   try {
     const appointment = await withTransaction(async (client) => {
       // Una llave por día elimina la carrera entre dos reservas simultáneas sin bloquear otros días.
@@ -200,18 +206,18 @@ publicRouter.post("/appointments", appointmentLimiter, async (req, res) => {
       const result = await client.query(
         `INSERT INTO appointments (
           reference_code, client_name, client_email, client_phone, starts_at, duration_minutes,
-          practice_area, reason, privacy_accepted_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING *`,
-        [reference, data.clientName, data.clientEmail.toLowerCase(), data.clientPhone, startsAt.toISOString(), settings.consultation_minutes, data.practiceArea, data.reason]
+          practice_area, reason, privacy_accepted_at,modality,payment_status,payment_amount,payment_instructions,tracking_hash,tracking_token_encrypted,tracking_expires_at,payment_test_mode
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),$9,$10,$11,$12,$13,$14,$5::timestamptz+INTERVAL '90 days',$15) RETURNING *`,
+        [reference, data.clientName, data.clientEmail.toLowerCase(), data.clientPhone, startsAt.toISOString(), settings.consultation_minutes, data.practiceArea, data.reason,data.modality,data.modality === "virtual" ? "pending" : "not_required",data.modality === "virtual" ? settings.virtual_fee : 0,data.modality === "virtual" ? settings.payment_instructions : "",tracking.hash,tracking.encrypted,data.modality === "virtual" && settings.payments_test_mode]
       );
+      await enqueueRecordNotifications(client,"appointment",result.rows[0],"created","Tu cita fue registrada");
       return result.rows[0];
     });
-    await sendAppointmentNotifications(appointment);
     const message = `Hola ${settings.attorney_name}, agendé una consulta para el ${data.date} a las ${data.time}. Mi nombre es ${data.clientName}. Código: ${reference}.`;
     const whatsappUrl = settings.whatsapp_number
       ? `https://wa.me/${String(settings.whatsapp_number).replace(/\D/g, "")}?text=${encodeURIComponent(message)}`
       : "";
-    return res.status(201).json({ ok: true, reference, startsAt: appointment.starts_at, whatsappUrl });
+    return res.status(201).json({ ok: true, reference, startsAt: appointment.starts_at, whatsappUrl, trackingToken: tracking.token, trackingUrl: trackingLink(settings,tracking.token), notification: "queued" });
   } catch (error: unknown) {
     if (error instanceof BookingConflictError) return res.status(409).json({ error: error.message });
     if (typeof error === "object" && error && "code" in error && error.code === "23505") {

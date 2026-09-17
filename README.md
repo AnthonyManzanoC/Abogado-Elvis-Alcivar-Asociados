@@ -2,6 +2,8 @@
 
 Sistema web integral para el despacho del Abg. Elvis Alcívar Burgos: sitio público, vitrina multimedia, agenda, WhatsApp, correo SMTP y panel administrativo. Usa PostgreSQL en Supabase; el frontend se publica en Vercel y la API en Render.
 
+Para publicar de forma segura, sigue la guía paso a paso de [despliegue en Vercel, Render y Supabase](docs/DEPLOYMENT.md). Incluye la configuración de CORS, migraciones, disco persistente y la clave de cifrado sin exponer secretos.
+
 ## Arquitectura
 
 | Parte | Carpeta | Destino |
@@ -10,7 +12,7 @@ Sistema web integral para el despacho del Abg. Elvis Alcívar Burgos: sitio púb
 | API, agenda, SMTP, archivos y recordatorios | `apps/api` | Render |
 | Datos | Supabase PostgreSQL | Supabase |
 
-Las migraciones `001_initial_schema.sql` y `002_brand_and_feed.sql` ya se aplicaron a la instancia Supabase configurada. Incluyen los datos iniciales del sitio, cuatro servicios, publicaciones de muestra, horarios, usuarios de administración, citas, correo y el campo de logo.
+Las migraciones aditivas `001` a `005` crean el sitio, publicaciones, agenda, mapa, portal de seguimiento, comprobantes privados y la cola de correo. El proceso de migración registra cada archivo aplicado y no vuelve a ejecutarlo sobre la misma base.
 
 ## Funciones incluidas
 
@@ -34,26 +36,9 @@ Las credenciales del primer administrador se toman de `ADMIN_SEED_EMAIL` y `ADMI
 
 ## Publicar
 
-### API en Render
+La guía de [despliegue seguro](docs/DEPLOYMENT.md) contiene el orden completo y las variables. En resumen: Render recibe `DATABASE_URL`, `FRONTEND_URL`, `PUBLIC_API_URL`, `JWT_SECRET` y una `CONFIG_ENCRYPTION_KEY` estable; Vercel recibe solo `VITE_API_URL`. En Vercel deja **Root Directory vacío**, porque [vercel.json](vercel.json) compila desde la raíz y publica `apps/web/dist`.
 
-1. Sube este proyecto a un repositorio Git privado.
-2. En Render, crea un Blueprint usando [render.yaml](render.yaml). El archivo compila la API, ejecuta las migraciones antes de publicar y crea un disco persistente para fotografías y videos.
-3. Proporciona en Render:
-   - `DATABASE_URL`: cadena de conexión de Supabase.
-   - `FRONTEND_URL`: URL final de Vercel, por ejemplo `https://tudominio.vercel.app`.
-   - `PUBLIC_API_URL`: URL final de Render, por ejemplo `https://alcivar-legal-api.onrender.com`.
-4. El Blueprint genera `JWT_SECRET` y `CONFIG_ENCRYPTION_KEY` de forma segura. No copies los valores locales a un repositorio.
-
-El certificado de Supabase está incluido en `apps/api/certs` y la API lo usa para verificar la conexión de producción.
-
-El administrador existente se conserva en Supabase: no necesitas ejecutar `seed` ni configurar `ADMIN_SEED_PASSWORD` para arrancar la API en Render. En una base nueva, configura temporalmente `ADMIN_SEED_EMAIL` y `ADMIN_SEED_PASSWORD` y ejecuta `npm run seed`. No añadas parámetros SSL a `DATABASE_URL`: la API configura TLS con el certificado incluido.
-
-### Frontend en Vercel
-
-1. Importa el mismo repositorio en Vercel.
-2. Vercel detecta [vercel.json](vercel.json); usa `apps/web/dist` como salida.
-3. Añade `VITE_API_URL` con la URL HTTPS de la API publicada en Render, sin barra final.
-4. Publica. Luego actualiza `FRONTEND_URL` de Render con la URL de Vercel y vuelve a desplegar la API.
+El certificado de Supabase está incluido en `apps/api/certs` y la API lo usa para verificar TLS. El administrador existente se conserva en Supabase: no ejecutes `seed` sobre producción. En una base nueva, configura temporalmente `ADMIN_SEED_EMAIL` y `ADMIN_SEED_PASSWORD` y ejecuta `npm run seed` una sola vez.
 
 ## Operación diaria
 

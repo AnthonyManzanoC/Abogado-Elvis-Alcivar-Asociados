@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSite } from "../context/SiteContext";
 import { api } from "../lib/api";
+import { safeExternalUrl } from "../lib/contact";
 import { SocialMedia } from "../components/SocialMedia";
 import type { Publication } from "../types";
 
@@ -42,16 +43,16 @@ export function ShowcasePage() {
     observer.observe(node); return () => observer.disconnect();
   }, [offset, hasMore, loading, filter]);
   return <>
-    <section className="inner-hero page-section split-title showcase-hero"><div><span className="eyebrow">Vitrina legal</span><h1>Trabajo, criterio y actualidad.</h1></div><p>Contenido educativo y una mirada al trabajo del despacho. Los casos se comparten respetando la confidencialidad y sin prometer resultados.</p></section>
+    <section className="inner-hero page-section split-title showcase-hero"><div><span className="eyebrow">Vitrina legal</span><h1>{settings.results_phrase || "Resultados de tener una defensa técnica y eficaz"}</h1></div><p>Contenido educativo y una mirada al trabajo del despacho. Los casos se comparten respetando la confidencialidad y sin prometer resultados.</p></section>
     <section className="showcase-toolbar page-section">
       <div className="filter-tabs" role="group" aria-label="Filtrar publicaciones">{filters.map((item) => <button className={filter === item ? "active" : ""} onClick={() => setFilter(item)} key={item}>{item}</button>)}</div>
       <div className="social-actions"><a href={settings.instagram_url} target="_blank" rel="noreferrer"><Instagram /> Instagram</a><a href={settings.tiktok_url} target="_blank" rel="noreferrer">TikTok ↗</a></div>
     </section>
     <section className="showcase-grid page-section">
-      {items.map((post, index) => <article className={index === 0 ? "showcase-card wide" : "showcase-card"} key={post.id}>
+      {items.map((post, index) => { const sourceUrl = safeExternalUrl(post.external_url); return <article className={index === 0 ? "showcase-card wide" : "showcase-card"} key={post.id}>
         <SocialMedia post={post} interactive />
-        <div className="showcase-copy"><span>{post.kind}</span><h2>{post.title}</h2><p>{post.excerpt}</p>{post.external_url ? <a className="text-link" href={post.external_url} target="_blank" rel="noreferrer">Abrir en {post.platform} <ArrowRight /></a> : <Link className="text-link" to={`/vitrina/${post.slug}`}>Leer contenido <ArrowRight /></Link>}</div>
-      </article>)}
+        <div className="showcase-copy"><span>{post.kind}</span><h2>{post.title}</h2><p>{post.excerpt}</p><Link className="text-link" to={`/vitrina/${post.slug}`}>Ver historia completa <ArrowRight /></Link>{sourceUrl ? <a className="text-link" href={sourceUrl} target="_blank" rel="noreferrer">Abrir en {post.platform} <ArrowRight /></a> : <Link className="text-link" to={`/vitrina/${post.slug}`}>Leer contenido <ArrowRight /></Link>}</div>
+      </article>; })}
       {!items.length && !loading && <div className="empty-state"><h2>Aún no hay publicaciones aquí.</h2><p>El nuevo contenido aparecerá cuando se publique desde el panel administrativo.</p></div>}
     </section>
     <div className="feed-sentinel page-section" ref={sentinel}>{loading && <span><LoaderCircle className="spin" /> Cargando más contenido...</span>}{feedError && <button className="text-link" onClick={() => { setHasMore(true); void loadMore(items.length === 0); }}>Reintentar carga <ArrowRight /></button>}{!feedError && !hasMore && items.length > 0 && <span>Has llegado al final de la vitrina.</span>}</div>

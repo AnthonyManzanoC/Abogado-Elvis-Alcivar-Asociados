@@ -7,6 +7,8 @@ import { config } from "./config.js";
 import { db } from "./db.js";
 import { adminRouter } from "./routes/admin.js";
 import { publicRouter } from "./routes/public.js";
+import { experienceRouter } from "./routes/experience.js";
+import { clientAdminRouter, clientPortalRouter } from "./routes/client-portal.js";
 
 export const app = express();
 
@@ -23,7 +25,15 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false }));
 
 if (existsSync(config.uploadsDir)) {
-  app.use("/uploads", express.static(config.uploadsDir, { maxAge: config.nodeEnv === "production" ? "7d" : 0 }));
+  app.use("/uploads", express.static(config.uploadsDir, {
+    maxAge: config.nodeEnv === "production" ? "7d" : 0,
+    // Media is public by design, but it must never execute if an old or
+    // malformed upload is requested directly as a document.
+    setHeaders(res) {
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    }
+  }));
 }
 
 app.get("/api/health", async (_req, res) => {
@@ -32,7 +42,10 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.use("/api/public", publicRouter);
+app.use("/api/public", clientPortalRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/admin", experienceRouter);
+app.use("/api/admin", clientAdminRouter);
 
 app.use((_req, res) => res.status(404).json({ error: "Ruta no encontrada" }));
 

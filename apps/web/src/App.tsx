@@ -10,6 +10,7 @@ import { AppointmentPage } from "./pages/AppointmentPage";
 import { AdminPage } from "./pages/AdminPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
+import { ConsultationPage, TrackingPage } from "./pages/ClientPortal";
 
 export default function App() {
   return <Routes>
@@ -21,6 +22,8 @@ export default function App() {
       <Route path="vitrina/:slug" element={<PublicationPage />} />
       <Route path="contacto" element={<ContactPage />} />
       <Route path="agendar" element={<AppointmentPage />} />
+      <Route path="consultar" element={<ConsultationPage />} />
+      <Route path="seguimiento" element={<TrackingPage />} />
       <Route path="privacidad" element={<PrivacyPage />} />
       <Route path="terminos" element={<TermsPage />} />
     </Route>

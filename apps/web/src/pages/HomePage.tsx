@@ -7,7 +7,7 @@ const iconFor = (icon: string) => icon === "shield" ? ShieldCheck : Scale;
 
 export function HomePage() {
   const { settings, services, publications } = useSite();
-  const featured = publications.slice(0, 3);
+  const featured = [...publications.filter((post) => post.kind === "case"), ...publications.filter((post) => post.kind !== "case")].slice(0, 3);
   return <>
     <section className="hero page-section">
       <div className="hero-copy">
@@ -24,7 +24,7 @@ export function HomePage() {
         </div>
       </div>
       <div className="hero-visual">
-        <div className="hero-frame"><img src="/images/elvis-teal.png" alt="Abg. Elvis Alcívar Burgos" /></div>
+        <div className="hero-frame"><img src={assetUrl(settings.hero_image_url || "/images/elvis-burgundy.png")} alt="Abg. Elvis Alcívar Burgos" /></div>
         <div className="hero-name-card"><span>{settings.professional_title}</span><strong>Elvis<br />Alcívar Burgos</strong><small>Babahoyo · Los Ríos</small></div>
         <div className="hero-seal"><Scale /><span>Defensa<br />estratégica</span></div>
       </div>
@@ -45,16 +45,16 @@ export function HomePage() {
     </section>
 
     <section className="about-band">
-      <div className="about-image"><img src="/images/elvis-gray.png" alt="Retrato profesional del abogado Elvis Alcívar" /><span className="image-caption">Preparación · Criterio · Presencia</span></div>
+      <div className="about-image"><img src={assetUrl(settings.profile_image_url || "/images/elvis-profile-new.png")} alt="Retrato profesional del abogado Elvis Alcívar" /><span className="image-caption">Preparación · Criterio · Presencia</span></div>
       <div className="about-copy"><span className="eyebrow">El abogado</span><h2>Tu defensa, en manos de quien escucha antes de actuar.</h2><p className="lead">{settings.biography}</p><p>Cada asunto comienza con una conversación honesta: qué ocurrió, qué está en riesgo y qué opciones existen. Desde ahí se construye una ruta jurídica comprensible y responsable.</p><Link className="button button-dark" to="/perfil">Conoce su perfil <ArrowRight size={18} /></Link></div>
     </section>
 
     <section className="page-section showcase-preview">
-      <div className="section-heading"><div><span className="eyebrow">Vitrina legal</span><h2>Ideas, trabajo y actualidad.</h2></div><Link className="text-link" to="/vitrina">Explorar contenido <ArrowRight size={17} /></Link></div>
+      <div className="section-heading"><div><span className="eyebrow">Vitrina legal</span><h2>{settings.results_phrase || "Resultados de tener una defensa técnica y eficaz"}</h2></div><Link className="text-link" to="/vitrina">Explorar contenido <ArrowRight size={17} /></Link></div>
       <div className="publication-grid">
         {featured.map((post, index) => <article className={index === 0 ? "publication-card featured" : "publication-card"} key={post.id}>
-          <div className="publication-image"><img src={assetUrl(post.thumbnail_url) || "/images/elvis-desk.png"} alt="" />{post.kind === "video" && <span className="play-badge"><Play fill="currentColor" /></span>}<span className="platform-badge">{post.platform}</span></div>
-          <div className="publication-body"><span>{post.kind === "case" ? "Caso" : post.kind === "article" ? "Criterio legal" : "Desde el despacho"}</span><h3>{post.title}</h3><p>{post.excerpt}</p>{post.external_url ? <a className="text-link" href={post.external_url} target="_blank" rel="noreferrer">Ver publicación <ArrowRight size={16} /></a> : <Link className="text-link" to={`/vitrina/${post.slug}`}>Leer más <ArrowRight size={16} /></Link>}</div>
+          <div className="publication-image">{post.thumbnail_url ? <img src={assetUrl(post.thumbnail_url)} alt="" /> : <div className="publication-source-preview"><span>{post.platform}</span><strong>Publicación original</strong></div>}{post.kind === "video" && <span className="play-badge"><Play fill="currentColor" /></span>}<span className="platform-badge">{post.platform}</span></div>
+          <div className="publication-body"><span>{post.kind === "case" ? "Caso publicado" : post.kind === "article" ? "Criterio legal" : "Desde el despacho"}</span><h3>{post.title}</h3><p>{post.excerpt}</p><Link className="text-link" to={`/vitrina/${post.slug}`}>Ver en vitrina <ArrowRight size={16} /></Link></div>
         </article>)}
       </div>
     </section>

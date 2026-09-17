@@ -12,7 +12,8 @@
     "migrate": "npm run migrate -w @alcivar/api",
     "seed": "npm run seed -w @alcivar/api",
     "typecheck": "npm run typecheck -w @alcivar/api && npm run typecheck -w @alcivar/web",
-    "test": "tsx --tsconfig apps/web/tsconfig.app.json --test tests/contact.test.ts"
+    "test": "tsx --tsconfig apps/web/tsconfig.app.json --test tests/contact.test.ts",
+    "test:portal": "npm run test:portal -w @alcivar/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

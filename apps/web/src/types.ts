@@ -1,4 +1,13 @@
 export type SiteSettings = {
+  hero_image_url?: string;
+  profile_image_url?: string;
+  results_phrase?: string;
+  rights_phrase?: string;
+  assistant_enabled?: boolean;
+  virtual_enabled?: boolean;
+  virtual_fee?: number | string;
+  payment_instructions?: string;
+  payments_test_mode?: boolean;
   firm_name: string;
   logo_url: string;
   attorney_name: string;
@@ -37,6 +46,7 @@ export type Service = {
 };
 
 export type Publication = {
+  gallery?: { url: string; type: "image" | "video"; alt: string }[];
   id: string;
   slug: string;
   title: string;

@@ -2,14 +2,16 @@ import { ArrowRight, BookOpen, Compass, Handshake, Quote, Scale } from "lucide-r
 import { Link } from "react-router-dom";
 import { useSite } from "../context/SiteContext";
 
+import { assetUrl } from "../lib/api";
+
 export function ProfilePage() {
   const { settings } = useSite();
   return <>
     <section className="profile-hero page-section">
-      <div className="profile-portrait"><img src="/images/elvis-gray.png" alt={settings.attorney_name} /><div className="portrait-monogram">EA</div></div>
+      <div className="profile-portrait"><img src={assetUrl(settings.profile_image_url || "/images/elvis-profile-new.png")} alt={settings.attorney_name} /><div className="portrait-monogram">EA</div></div>
       <div className="profile-intro"><span className="eyebrow">Perfil profesional</span><h1>Elvis<br /><em>Alcívar Burgos</em></h1><p className="profile-role">{settings.professional_title} · Babahoyo</p><p>{settings.biography}</p><Link className="button button-gold" to="/agendar">Conversar sobre mi caso <ArrowRight size={18} /></Link></div>
     </section>
-    <section className="profile-quote page-section"><Quote /><blockquote>“Una defensa sólida comienza escuchando con atención y preparando cada decisión con criterio.”</blockquote></section>
+    <section className="profile-quote page-section"><Quote /><blockquote>“{settings.rights_phrase || "Tu libertad y tus derechos no son negociables"}”</blockquote></section>
     <section className="profile-story page-section">
       <div><span className="eyebrow">Enfoque de trabajo</span><h2>Rigor técnico con una comunicación que puedas entender.</h2></div>
       <div><p>Un proceso legal puede sentirse incierto. Por eso, además de la preparación jurídica, el trabajo exige explicar qué sucede, qué viene después y por qué se toma cada decisión.</p><p>La atención es directa y confidencial. Cada consulta se analiza según sus propios hechos; no se ofrecen respuestas automáticas ni promesas de resultados.</p></div>

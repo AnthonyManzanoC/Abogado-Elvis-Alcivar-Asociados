@@ -1,5 +1,4 @@
 import { mkdir } from "node:fs/promises";
-import { extname } from "node:path";
 import crypto from "node:crypto";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
@@ -8,17 +7,30 @@ import multer from "multer";
 import { z } from "zod";
 import { config } from "../config.js";
 import { db, withTransaction } from "../db.js";
-import { sendSmtpTest } from "../notifications.js";
+import { sendSmtpTest, enqueueRecordNotifications } from "../notifications.js";
+import { adminRecord } from "../client-security.js";
 import { encryptSecret, requireAdmin, signAdminToken } from "../security.js";
 import { slugify } from "../utils.js";
-import { availabilitySchema, settingsSchema } from "../settings-schema.js";
+import { availabilitySchema, isHttpsUrl, settingsSchema } from "../settings-schema.js";
 
 await mkdir(config.uploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: config.uploadsDir,
   filename: (_req, file, callback) => {
-    const extension = extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "");
+    // Do not retain a user-controlled extension.  The public uploads folder is
+    // served statically, so a file uploaded as `image/jpeg` but named `.html`
+    // must never become executable HTML at that origin.
+    const extensionByMime: Record<string, string> = {
+      "image/jpeg": ".jpg",
+      "image/png": ".png",
+      "image/webp": ".webp",
+      "video/mp4": ".mp4",
+      "video/webm": ".webm",
+      "video/quicktime": ".mov"
+    };
+    const extension = extensionByMime[file.mimetype];
+    if (!extension) return callback(new Error("Solo se permiten imágenes y videos"), "");
     callback(null, `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${extension}`);
   }
 });
@@ -97,7 +109,7 @@ adminRouter.get("/appointments", async (req, res) => {
     where += ` AND status = $${values.length}`;
   }
   const { rows } = await db.query(`SELECT * FROM appointments WHERE ${where} ORDER BY starts_at DESC LIMIT 300`, values);
-  res.json(rows);
+  res.json(rows.map(adminRecord));
 });
 
 adminRouter.patch("/appointments/:id", async (req, res) => {
@@ -106,12 +118,16 @@ adminRouter.patch("/appointments/:id", async (req, res) => {
     internalNotes: z.string().max(2000).optional().default("")
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Actualización inválida" });
-  const { rows } = await db.query(
-    `UPDATE appointments SET status = $1, internal_notes = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
-    [parsed.data.status, parsed.data.internalNotes, req.params.id]
-  );
-  if (!rows[0]) return res.status(404).json({ error: "Cita no encontrada" });
-  res.json(rows[0]);
+  if (!z.uuid().safeParse(req.params.id).success) return res.status(400).json({ error: "Identificador inválido" });
+  const row = await withTransaction(async client => {
+    const old = (await client.query("SELECT * FROM appointments WHERE id=$1 FOR UPDATE",[req.params.id])).rows[0];
+    if (!old) return null;
+    const updated = (await client.query("UPDATE appointments SET status=$1,internal_notes=$2,updated_at=NOW() WHERE id=$3 RETURNING *",[parsed.data.status,parsed.data.internalNotes,req.params.id])).rows[0];
+    if(old.status!==updated.status)await enqueueRecordNotifications(client,"appointment",updated,"status_"+crypto.randomUUID(),"Cambio de estado de tu cita");
+    return updated;
+  });
+  if (!row) return res.status(404).json({ error: "Cita no encontrada" });
+  res.json(adminRecord(row));
 });
 
 adminRouter.get("/publications", async (_req, res) => {
@@ -119,6 +135,14 @@ adminRouter.get("/publications", async (_req, res) => {
   res.json(rows);
 });
 
+const publicationAssetUrl = z.string().trim().max(1500).refine(
+  (value) => !value || isHttpsUrl(value) || /^\/(?:images|uploads)\/[a-zA-Z0-9._-]+$/.test(value) || /^http:\/\/localhost:\d+\/uploads\/[a-zA-Z0-9._-]+$/.test(value),
+  "La imagen o el video debe ser una carga local o una URL HTTPS segura"
+);
+const publicationSourceUrl = z.string().trim().max(1500).refine(
+  (value) => !value || isHttpsUrl(value),
+  "El enlace original debe usar HTTPS"
+);
 const publicationSchema = z.object({
   title: z.string().trim().min(3).max(180),
   slug: z.string().trim().max(100).optional().default(""),
@@ -126,9 +150,10 @@ const publicationSchema = z.object({
   body: z.string().trim().max(20000).optional().default(""),
   kind: z.enum(["article", "case", "video", "photo", "news"]),
   platform: z.enum(["website", "instagram", "tiktok", "youtube", "facebook"]),
-  mediaUrl: z.string().trim().max(1000).optional().default(""),
-  thumbnailUrl: z.string().trim().max(1000).optional().default(""),
-  externalUrl: z.string().trim().max(1000).optional().default(""),
+  mediaUrl: publicationAssetUrl.optional().default(""),
+  thumbnailUrl: publicationAssetUrl.optional().default(""),
+  externalUrl: publicationSourceUrl.optional().default(""),
+  gallery: z.array(z.object({ url: publicationAssetUrl, type:z.enum(["image","video"]),alt:z.string().max(300).optional().default("") })).max(20).optional(),
   featured: z.boolean().optional().default(false),
   status: z.enum(["draft", "published", "archived"]),
   legalDisclaimer: z.string().trim().max(500).optional().default("")
@@ -140,9 +165,9 @@ adminRouter.post("/publications", async (req, res) => {
   const p = parsed.data;
   const slug = slugify(p.slug || p.title);
   const { rows } = await db.query(
-    `INSERT INTO publications (slug, title, excerpt, body, kind, platform, media_url, thumbnail_url, external_url, featured, status, legal_disclaimer, published_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, CASE WHEN $11 = 'published' THEN NOW() ELSE NULL END) RETURNING *`,
-    [slug, p.title, p.excerpt, p.body, p.kind, p.platform, p.mediaUrl, p.thumbnailUrl, p.externalUrl, p.featured, p.status, p.legalDisclaimer]
+    `INSERT INTO publications (slug, title, excerpt, body, kind, platform, media_url, thumbnail_url, external_url, featured, status, legal_disclaimer, published_at,gallery)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, CASE WHEN $11 = 'published' THEN NOW() ELSE NULL END,$13::jsonb) RETURNING *`,
+    [slug, p.title, p.excerpt, p.body, p.kind, p.platform, p.mediaUrl, p.thumbnailUrl, p.externalUrl, p.featured, p.status, p.legalDisclaimer,JSON.stringify(p.gallery??[])]
   );
   res.status(201).json(rows[0]);
 });
@@ -154,10 +179,10 @@ adminRouter.put("/publications/:id", async (req, res) => {
   const slug = slugify(p.slug || p.title);
   const { rows } = await db.query(
     `UPDATE publications SET slug=$1,title=$2,excerpt=$3,body=$4,kind=$5,platform=$6,media_url=$7,thumbnail_url=$8,
-      external_url=$9,featured=$10,status=$11,legal_disclaimer=$12,
+      external_url=$9,featured=$10,status=$11,legal_disclaimer=$12,gallery=COALESCE($14::jsonb,gallery),
       published_at=CASE WHEN $11='published' THEN COALESCE(published_at,NOW()) ELSE published_at END,updated_at=NOW()
      WHERE id=$13 RETURNING *`,
-    [slug, p.title, p.excerpt, p.body, p.kind, p.platform, p.mediaUrl, p.thumbnailUrl, p.externalUrl, p.featured, p.status, p.legalDisclaimer, req.params.id]
+    [slug, p.title, p.excerpt, p.body, p.kind, p.platform, p.mediaUrl, p.thumbnailUrl, p.externalUrl, p.featured, p.status, p.legalDisclaimer, req.params.id,p.gallery ? JSON.stringify(p.gallery):null]
   );
   if (!rows[0]) return res.status(404).json({ error: "Publicación no encontrada" });
   res.json(rows[0]);
@@ -216,7 +241,7 @@ adminRouter.delete("/services/:id", async (req, res) => {
 adminRouter.get("/settings", async (_req, res) => {
   const { rows } = await db.query("SELECT * FROM site_settings WHERE id = 1");
   const settings = rows[0];
-  const { smtp_password_encrypted, ...safe } = settings;
+  const { smtp_password_encrypted, brevo_api_key_encrypted, ...safe } = settings;
   res.json({ ...safe, smtpPasswordConfigured: Boolean(smtp_password_encrypted) });
 });
 
@@ -250,7 +275,7 @@ adminRouter.put("/settings", async (req, res) => {
     }
     return rows[0];
   });
-  const { smtp_password_encrypted, ...safe } = settings;
+  const { smtp_password_encrypted, brevo_api_key_encrypted, ...safe } = settings;
   res.json({ ...safe, smtpPasswordConfigured: Boolean(smtp_password_encrypted) });
 });
 

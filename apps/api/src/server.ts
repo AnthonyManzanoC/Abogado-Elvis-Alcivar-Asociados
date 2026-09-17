@@ -2,10 +2,18 @@ import cron from "node-cron";
 import { app } from "./app.js";
 import { config } from "./config.js";
 import { db } from "./db.js";
-import { sendDueReminders } from "./notifications.js";
+import { sendDueReminders, processNotificationQueue } from "./notifications.js";
 
 const server = app.listen(config.port, () => {
   console.log(`Alcívar Legal API disponible en http://localhost:${config.port}`);
+});
+
+let processingMail = false;
+cron.schedule("* * * * *", async () => {
+  if (processingMail) return;
+  processingMail = true;
+  try { await processNotificationQueue(); } catch { console.error("No se pudo procesar la cola de correo"); }
+  finally { processingMail = false; }
 });
 
 cron.schedule("*/15 * * * *", () => {

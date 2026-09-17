@@ -3,7 +3,9 @@ services:
     name: alcivar-legal-api
     runtime: node
     plan: starter
-    buildCommand: npm install && npm run build -w @alcivar/api
+    # TypeScript and the migration runner are development dependencies, but are
+    # required while building this TypeScript service.
+    buildCommand: npm ci --include=dev && npm run build -w @alcivar/api
     preDeployCommand: npm run migrate -w @alcivar/api
     startCommand: npm run start -w @alcivar/api
     healthCheckPath: /api/health
@@ -21,7 +23,9 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CONFIG_ENCRYPTION_KEY
-        generateValue: true
+        # Set this privately in Render before the first deploy. It must match
+        # the stable key used to encrypt records already stored in Supabase.
+        sync: false
       - key: PUBLIC_API_URL
         sync: false
       - key: UPLOADS_DIR
