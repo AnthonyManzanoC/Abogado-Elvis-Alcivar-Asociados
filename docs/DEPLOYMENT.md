@@ -27,7 +27,7 @@ Completa estas variables privadas en Render:
 | --- | --- | --- |
 | `DATABASE_URL` | Cadena PostgreSQL de Supabase | Usa la cadena de conexión de la base objetivo; codifica caracteres especiales de la contraseña dentro de la URL. No añadas parámetros SSL manuales. |
 | `DATABASE_CA_CERT` | Certificado TLS de Supabase | Déjala como `certs/supabase-root-2021.crt`, ruta incluida dentro de `apps/api`. |
-| `FRONTEND_URL` | Orígenes permitidos por CORS | URL HTTPS exacta de Vercel. Para más de un dominio autorizado, sepáralos por coma; no uses comodines. |
+| `FRONTEND_URL` | Orígenes permitidos por CORS | El Blueprint parte de `https://abogado-elvis-alcivar-asociados.vercel.app`. Para más dominios autorizados, usa sus URLs HTTPS exactas separadas por coma; no uses comodines ni rutas. La API normaliza una barra final. |
 | `PUBLIC_API_URL` | URL pública de Render | URL HTTPS final de la API, sin barra final. |
 | `JWT_SECRET` | Sesiones ADMIN | Secreto aleatorio de al menos 32 caracteres. Manténlo privado. |
 | `CONFIG_ENCRYPTION_KEY` | Cifrado de datos configurados en ADMIN | Clave estable de 32 bytes: 64 caracteres hexadecimales o base64 válido. No la cambies sin migrar los datos cifrados. |
@@ -73,7 +73,7 @@ Usa el botón de prueba solo con un remitente validado en Brevo. Una aceptación
 
 1. Copia la URL final de producción de Vercel (incluido el dominio propio si se usa) en `FRONTEND_URL` de Render.
 2. Si se autorizan dos dominios, escribe ambas URLs exactas separadas por coma, por ejemplo el dominio canónico y su variante `www`.
-3. Guarda las variables y vuelve a desplegar la API de Render.
+3. Guarda las variables y vuelve a desplegar la API. La URL de producción de Vercel queda incluida como respaldo estricto por el código, pero `FRONTEND_URL` debe seguir contener cualquier dominio propio autorizado.
 4. Prueba desde Vercel una lectura pública, una solicitud de consulta y el acceso ADMIN. Si el navegador muestra `Origen no permitido`, compara literalmente el origen del navegador con `FRONTEND_URL`: protocolo, dominio y sin ruta.
 
 Los deployments de preview de Vercel no quedan autorizados automáticamente por seguridad. Para probar formularios contra la API de producción, añade temporalmente la URL exacta del preview a `FRONTEND_URL` y elimínala cuando termines. No uses `*`.

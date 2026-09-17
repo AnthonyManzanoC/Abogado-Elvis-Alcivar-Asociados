@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { resolve } from "node:path";
+import { configuredFrontendOrigins } from "./cors-origin.js";
 
 const required = (name: string, fallback?: string) => {
   const value = process.env[name] ?? fallback;
@@ -17,9 +18,7 @@ export const config = {
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: required("DATABASE_URL"),
   databaseCaCert: process.env.DATABASE_CA_CERT ? resolve(process.cwd(), process.env.DATABASE_CA_CERT) : "",
-  frontendUrls: required("FRONTEND_URL", "http://localhost:5173")
-    .split(",")
-    .map((url) => url.trim()),
+  frontendUrls: configuredFrontendOrigins(process.env.FRONTEND_URL, process.env.NODE_ENV ?? "development"),
   jwtSecret: required("JWT_SECRET"),
   encryptionKey: encryptionKeyValue,
   encryptionKeyBuffer,

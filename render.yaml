@@ -19,7 +19,9 @@ services:
       - key: DATABASE_CA_CERT
         value: certs/supabase-root-2021.crt
       - key: FRONTEND_URL
-        sync: false
+        # Exact production origin. Additional trusted domains can be entered
+        # manually as a comma-separated list; no wildcard is accepted.
+        value: https://abogado-elvis-alcivar-asociados.vercel.app
       - key: JWT_SECRET
         generateValue: true
       - key: CONFIG_ENCRYPTION_KEY

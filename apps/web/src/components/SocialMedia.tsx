@@ -4,6 +4,28 @@ import { assetUrl } from "../lib/api";
 import { safeExternalUrl } from "../lib/contact";
 import type { Publication } from "../types";
 
+// These are first-party portraits already bundled with the site.  They make an
+// honest, branded preview while the visitor decides whether to load a social
+// provider.  They are deliberately not copied from Instagram or presented as
+// a slide from the source post.
+const CASE_PREVIEW_BACKDROPS = [
+  { src: "/images/elvis-office.png", position: "center 35%" },
+  { src: "/images/elvis-desk.png", position: "center 42%" },
+  { src: "/images/elvis-burgundy.png", position: "center 24%" },
+  { src: "/images/elvis-gray.png", position: "center 28%" },
+  { src: "/images/elvis-teal.png", position: "center 25%" },
+  { src: "/images/elvis-profile-new.png", position: "center 28%" }
+] as const;
+
+function casePreviewBackdrop(slug: string) {
+  let hash = 2166136261;
+  for (const character of slug) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return CASE_PREVIEW_BACKDROPS[(hash >>> 0) % CASE_PREVIEW_BACKDROPS.length];
+}
+
 export function embedUrl(post: Pick<Publication,"external_url">) {
   try {
     const u=new URL(post.external_url);
@@ -22,10 +44,16 @@ export function SocialMedia({post,interactive=false}:{post:Publication;interacti
   const thumb=assetUrl(post.thumbnail_url),media=assetUrl(post.media_url);
   const providerLabel=post.platform === "instagram" ? "Instagram" : post.platform === "tiktok" ? "TikTok" : post.platform === "youtube" ? "YouTube" : post.platform;
   const officialPreview = Boolean(source && embed && !current && !media);
-  const sourcePreview = <button className="official-post-preview" type="button" onClick={()=>setLoaded(true)} aria-label={`Cargar publicación original de ${providerLabel}: ${post.title}`}>
-    {post.platform === "instagram" ? <Instagram /> : <Play />}
-    <span><strong>Publicación original de {providerLabel}</strong><small>{interactive ? "Cargar carrusel, fotos, descripción y contenido que permita la red" : "Ver la publicación original"}</small></span>
-    <Play className="official-post-play" fill="currentColor" />
+  // A thumbnail supplied from ADMIN always wins.  Only social case cards that
+  // do not have one receive a deterministic, local branded image.
+  const fallbackBackdrop = !thumb && post.kind === "case" ? casePreviewBackdrop(post.slug) : undefined;
+  const previewImage = thumb || fallbackBackdrop?.src;
+  const sourcePreview = <button className={`official-post-preview${previewImage ? " has-preview-image" : ""}`} type="button" onClick={()=>setLoaded(true)} aria-label={`Cargar publicación original de ${providerLabel}: ${post.title}`}>
+    {previewImage && <img className="official-post-preview-image" src={previewImage} alt="" aria-hidden="true" loading="lazy" style={fallbackBackdrop ? { objectPosition: fallbackBackdrop.position } : undefined} />}
+    <span className="official-post-preview-overlay" aria-hidden="true" />
+    <span className="official-post-preview-icon" aria-hidden="true">{post.platform === "instagram" ? <Instagram /> : <Play />}</span>
+    <span className="official-post-preview-copy"><strong>Publicación original de {providerLabel}</strong><small>{interactive ? "Cargar carrusel, fotos, descripción y contenido que permita la red" : "Ver la publicación original"}</small></span>
+    <span className="official-post-play" aria-hidden="true"><Play fill="currentColor" /></span>
   </button>;
   return <div className="social-media-block">
     {interactive&&current?<div className="media-carousel" role="region" aria-label={`Galería: ${post.title}`} tabIndex={0} onKeyDown={e=>{if(e.key==="ArrowRight")setIndex(i=>(i+1)%gallery.length);if(e.key==="ArrowLeft")setIndex(i=>(i+gallery.length-1)%gallery.length);}}>
